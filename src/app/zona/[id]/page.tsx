@@ -31,47 +31,89 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
   const [anuncios, setAnuncios] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [necesidadesRefugios, setNecesidadesRefugios] = useState<any[]>([]);
   const router = useRouter();
   const supabase = createClient();
   const { dialogProps, showAlert, showDanger } = useDialog();
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    setFetchError(null);
-    // Cargar info de la zona
-    const { data: zonaData } = await supabase
-      .from('zonas')
-      .select('id, nombre_zona, estado')
-      .eq('id', zonaId)
-      .single();
-
-    // Cargar reportes filtrados por zona
-    const { data: reportesData, error } = await supabase
-      .from('reportes_ciudadanos')
-      .select('id, tipo, descripcion, numero_telefono, estado_reporte, created_at')
-      .eq('zona_id', zonaId)
-      .order('created_at', { ascending: false });
-
-    // Cargar anuncios oficiales
-    const { data: anunciosData } = await supabase
-      .from('anuncios_oficiales')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      setFetchError(error.message);
-    } else if (reportesData) {
-      setReports(reportesData);
-    }
-    
-    if (anunciosData) setAnuncios(anunciosData);
-    if (zonaData) setZona(zonaData);
-    setLoading(false);
-  }, [zonaId, supabase]);
-
   useEffect(() => {
+    if (!zonaId) return;
+    
+    // Auth check
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+      if (user.app_metadata?.role !== 'zone_leader' && user.app_metadata?.role !== 'super_admin') {
+        router.push('/');
+      }
+    });
+
+    const fetchData = async () => {
+      setLoading(true);
+      // Cargar info de la zona
+      const { data: zonaData } = await supabase
+        .from('zonas')
+        .select('id, nombre_zona, estado')
+        .eq('id', zonaId)
+        .single();
+      if (zonaData) setZona(zonaData);
+
+      // Cargar reportes
+      const { data: reportesData, error: reportesError } = await supabase
+        .from('reportes_ciudadanos')
+        .select('id, tipo, descripcion, numero_telefono, estado_reporte, created_at')
+        .eq('zona_id', zonaId)
+        .order('created_at', { ascending: false });
+      if (reportesData) setReports(reportesData);
+      if (reportesError) setFetchError(reportesError.message);
+      
+      // Cargar anuncios oficiales
+      const { data: anunciosData } = await supabase
+        .from('anuncios_oficiales')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (anunciosData) setAnuncios(anunciosData);
+
+      // Necesidades de Refugios
+      const { data: necData } = await supabase.from('necesidades_refugio')
+        .select('*, centros_refugio(nombre)')
+        .eq('estado', 'pendiente')
+        .order('created_at', { ascending: false });
+      if (necData) setNecesidadesRefugios(necData);
+      
+      setLoading(false);
+    };
+
     fetchData();
-  }, [fetchData]);
+
+    // Suscripciones
+    const reportesChannel = supabase
+      .channel('public:reportes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_ciudadanos', filter: `zona_id=eq.${zonaId}` }, () => {
+        fetchData();
+      })
+      .subscribe();
+      
+    const necesidadesChannel = supabase
+      .channel('public:necesidades')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'necesidades_refugio' }, () => {
+        supabase.from('necesidades_refugio')
+          .select('*, centros_refugio(nombre)')
+          .eq('estado', 'pendiente')
+          .order('created_at', { ascending: false })
+          .then(({ data }) => {
+            if (data) setNecesidadesRefugios(data);
+          });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(reportesChannel);
+      supabase.removeChannel(necesidadesChannel);
+    };
+  }, [zonaId, router, supabase]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -83,7 +125,6 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
       .from('reportes_ciudadanos')
       .update({ estado_reporte: 'atendido' })
       .eq('id', reporteId);
-    fetchData();
   };
 
   const eliminarReporte = async (reporteId: string) => {
@@ -92,8 +133,6 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
     const { error } = await supabase.from('reportes_ciudadanos').delete().eq('id', reporteId);
     if (error) {
       await showAlert('Error al eliminar', error.message);
-    } else {
-      fetchData();
     }
   };
 
@@ -116,9 +155,6 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
             </span>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={fetchData} className="p-2 text-slate-400 hover:text-white transition-colors" title="Recargar">
-              <RefreshCw className="w-5 h-5" />
-            </button>
             <button onClick={handleSignOut} className="flex items-center gap-2 text-sm font-medium text-slate-300 hover:text-white transition-colors bg-slate-800 px-4 py-2 rounded-lg border border-slate-700">
               <LogOut className="w-4 h-4" /> Salir
             </button>
@@ -132,18 +168,13 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
             <MapPin className="mr-3 text-teal-400 w-8 h-8" />
             {zona ? `${zona.nombre_zona} — Panel Operativo` : 'Cargando zona...'}
           </h1>
-          <p className="text-slate-400 mt-2">
-            Gestiona el inventario táctilmente. Los cambios se guardan localmente si no hay red.
-          </p>
         </div>
 
-        {/* Gestor de Inventario Offline-First */}
         <div className="mb-12">
           <GestorInventarioZona zonaId={zonaId} />
         </div>
 
-        {/* Anuncios Oficiales */}
-        <div className="mb-12 max-w-4xl mx-auto">
+        <div className="mb-12 max-w-7xl mx-auto">
           <h2 className="text-2xl font-bold text-white mb-6 flex items-center border-b border-slate-700 pb-4">
             <ShieldCheck className="text-emerald-400 mr-2" /> Anuncios Oficiales de Matriz
           </h2>
@@ -166,86 +197,110 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
           </div>
         </div>
 
-        {/* Reportes ciudadanos de la zona */}
-        <div className="bg-slate-800 rounded-2xl shadow-xl border border-slate-700 p-6 md:p-8 max-w-4xl mx-auto">
-          <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-            <h2 className="text-2xl font-bold text-white">Alertas Ciudadanas</h2>
-            <span className="bg-teal-500/20 text-teal-400 text-sm font-bold px-3 py-1 rounded-full border border-teal-500/30">
-              {reports.filter(r => r.estado_reporte === 'pendiente').length} pendientes
-            </span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2 space-y-8">
+            <div className="bg-slate-800 rounded-2xl shadow-xl border border-slate-700 p-6">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+                <h2 className="text-2xl font-bold text-white">Alertas Ciudadanas</h2>
+                <span className="bg-teal-500/20 text-teal-400 text-sm font-bold px-3 py-1 rounded-full border border-teal-500/30">
+                  {reports.filter(r => r.estado_reporte === 'pendiente').length} pendientes
+                </span>
+              </div>
+              {loading ? (
+                <div className="space-y-4 animate-pulse">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-24 bg-slate-700 rounded-2xl"></div>)}
+                </div>
+              ) : reports.length === 0 ? (
+                <p className="text-slate-400 text-center py-12">No hay reportes para esta zona aún.</p>
+              ) : (
+                <div className="space-y-4">
+                  {reports.map(r => (
+                    <div key={r.id} className={`p-5 rounded-2xl border transition-all ${
+                      r.estado_reporte === 'atendido'
+                        ? 'bg-slate-900/50 border-slate-800 opacity-60'
+                        : 'bg-slate-900 border-slate-700 hover:border-teal-500/50 shadow-md'
+                    }`}>
+                      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
+                        <div className="flex-1">
+                          <div className="flex flex-wrap items-center gap-3 mb-2">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                              r.tipo === 'alerta_daño' ? 'bg-red-500/20 text-red-400' : 'bg-teal-500/20 text-teal-400'
+                            }`}>
+                              {r.tipo === 'alerta_daño' ? 'Alerta' : 'Donación'}
+                            </span>
+                            <span className="text-sm text-slate-400">{tiempoRelativo(r.created_at)}</span>
+                            {r.estado_reporte === 'atendido' && (
+                              <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
+                                <CheckCircle2 className="w-4 h-4" /> Atendido
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-white text-lg font-medium">{r.descripcion}</p>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                          <a
+                            href={`https://wa.me/${r.numero_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center justify-center bg-slate-800 border border-slate-600 text-teal-400 px-5 py-3 rounded-xl font-black font-mono shadow-sm hover:bg-slate-700 active:scale-95 transition-all whitespace-nowrap"
+                          >
+                            <PhoneCall className="w-5 h-5 mr-2" />
+                            {r.numero_telefono}
+                          </a>
+
+                          {r.estado_reporte === 'pendiente' && (
+                            <button
+                              onClick={() => marcarAtendido(r.id)}
+                              className="flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-3 rounded-xl font-bold active:scale-95 transition-all whitespace-nowrap"
+                            >
+                              <CheckCircle2 className="w-5 h-5 mr-2" /> Marcar Atendido
+                            </button>
+                          )}
+
+                          <button
+                            onClick={() => eliminarReporte(r.id)}
+                            className="flex items-center justify-center bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-4 py-3 rounded-xl font-bold active:scale-95 transition-all whitespace-nowrap"
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {fetchError && (
-            <div className="mb-6 p-4 bg-red-900/40 border border-red-500 text-red-300 rounded-xl">
-              <span className="font-bold block text-red-400">Error al cargar reportes:</span>
-              <span className="text-sm font-mono mt-1 block">{fetchError}</span>
-            </div>
-          )}
-
-          {loading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="h-24 bg-slate-700 rounded-2xl animate-pulse"></div>
-              ))}
-            </div>
-          ) : reports.length === 0 ? (
-            <p className="text-slate-400 text-center py-12">No hay reportes para esta zona aún.</p>
-          ) : (
-            <div className="space-y-4">
-              {reports.map(r => (
-                <div key={r.id} className={`p-5 rounded-2xl border transition-all ${
-                  r.estado_reporte === 'atendido'
-                    ? 'bg-slate-900/50 border-slate-800 opacity-60'
-                    : 'bg-slate-900 border-slate-700 hover:border-teal-500/50 shadow-md'
-                }`}>
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-4">
-                    <div className="flex-1">
-                      <div className="flex flex-wrap items-center gap-3 mb-2">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                          r.tipo === 'alerta_daño' ? 'bg-red-500/20 text-red-400' : 'bg-teal-500/20 text-teal-400'
-                        }`}>
-                          {r.tipo === 'alerta_daño' ? 'Alerta' : 'Donación'}
-                        </span>
-                        <span className="text-sm text-slate-400">{tiempoRelativo(r.created_at)}</span>
-                        {r.estado_reporte === 'atendido' && (
-                          <span className="text-xs text-emerald-400 font-semibold flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4" /> Atendido
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-white text-lg font-medium">{r.descripcion}</p>
-                    </div>
-
-                    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
-                      <a
-                        href={`tel:${r.numero_telefono}`}
-                        className="flex items-center justify-center bg-slate-800 border border-slate-600 text-teal-400 px-5 py-3 rounded-xl font-black font-mono shadow-sm hover:bg-slate-700 active:scale-95 transition-all whitespace-nowrap"
-                      >
-                        <PhoneCall className="w-5 h-5 mr-2" />
-                        {r.numero_telefono}
-                      </a>
-
-                      {r.estado_reporte === 'pendiente' && (
-                        <button
-                          onClick={() => marcarAtendido(r.id)}
-                          className="flex items-center justify-center bg-emerald-500 hover:bg-emerald-400 text-slate-900 px-4 py-3 rounded-xl font-bold active:scale-95 transition-all whitespace-nowrap"
-                        >
-                          <CheckCircle2 className="w-5 h-5 mr-2" /> Marcar Atendido
-                        </button>
-                      )}
-
-                      <button
-                        onClick={() => eliminarReporte(r.id)}
-                        className="flex items-center justify-center bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 px-4 py-3 rounded-xl font-bold active:scale-95 transition-all whitespace-nowrap"
-                      >
-                        Eliminar
-                      </button>
-                    </div>
-                  </div>
+          <div className="bg-slate-800/80 backdrop-blur border border-slate-700/50 rounded-3xl p-6 shadow-xl">
+            <h2 className="text-xl font-bold text-white mb-6 flex items-center">
+              <span className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center mr-3">🏠</span>
+              Necesidades de Refugios
+            </h2>
+            <div className="space-y-4 max-h-[600px] overflow-y-auto">
+              {necesidadesRefugios.length === 0 ? (
+                <div className="text-center py-10 bg-slate-900/50 rounded-2xl border border-slate-800 border-dashed">
+                  <p className="text-slate-500">No hay solicitudes activas.</p>
                 </div>
-              ))}
+              ) : (
+                necesidadesRefugios.map(req => {
+                  const progress = Math.min(100, Math.round((req.cantidad_asignada / req.cantidad_solicitada) * 100));
+                  return (
+                    <div key={req.id} className="bg-slate-900 p-5 rounded-2xl border border-slate-700">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="text-white font-bold capitalize text-lg">{req.categoria}</h4>
+                        <span className="text-xs bg-slate-800 text-amber-400 px-3 py-1 rounded-full border border-amber-500/30">
+                          {req.centros_refugio?.nombre}
+                        </span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                        <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
       <DialogModal {...dialogProps} />
