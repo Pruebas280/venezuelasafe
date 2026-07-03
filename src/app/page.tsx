@@ -16,7 +16,7 @@ export default function PublicPortal() {
   // Forms state
   const [form, setForm] = useState({ zona_id: '', numero_telefono: '', descripcion: '' });
   const [voluntarioForm, setVoluntarioForm] = useState({
-    nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false
+    nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: ''
   });
   const [refugioForm, setRefugioForm] = useState({
     nombre: '', tipo_organizacion: 'iglesia', direccion: '', num_personas: '', contacto_nombre: '', contacto_telefono: ''
@@ -68,11 +68,13 @@ export default function PublicPortal() {
       ofrece_vehiculo: voluntarioForm.ofrece_vehiculo,
       vehiculo_tipo: voluntarioForm.ofrece_vehiculo ? voluntarioForm.vehiculo_tipo : null,
       vehiculo_modelo: voluntarioForm.ofrece_vehiculo ? voluntarioForm.vehiculo_modelo : null,
-      vehiculo_docs_aldia: voluntarioForm.ofrece_vehiculo ? voluntarioForm.vehiculo_docs_aldia : false
+      vehiculo_docs_aldia: voluntarioForm.ofrece_vehiculo ? voluntarioForm.vehiculo_docs_aldia : false,
+      es_adventista: voluntarioForm.es_adventista,
+      nombre_iglesia: voluntarioForm.es_adventista ? voluntarioForm.nombre_iglesia : null
     });
 
     finishSubmit();
-    setVoluntarioForm({ nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false });
+    setVoluntarioForm({ nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: '' });
   };
 
   const handleSubmitRefugio = async (e: React.FormEvent) => {
@@ -333,6 +335,20 @@ export default function PublicPortal() {
                         </label>
                       </div>
                     )}
+
+                    {/* Adventista */}
+                    <div className="bg-slate-900/50 p-5 rounded-2xl border border-slate-700 space-y-3">
+                      <label className="flex items-center space-x-3 cursor-pointer group">
+                        <input type="checkbox" checked={voluntarioForm.es_adventista} onChange={e => setVoluntarioForm(f => ({ ...f, es_adventista: e.target.checked, nombre_iglesia: '' }))} className="w-5 h-5 rounded border-slate-600 text-blue-500 focus:ring-blue-500 bg-slate-800" />
+                        <span className="text-slate-300 group-hover:text-white transition-colors font-medium">Soy miembro de la Iglesia Adventista del Séptimo Día</span>
+                      </label>
+                      {voluntarioForm.es_adventista && (
+                        <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                          <label className="block text-xs font-medium text-slate-400 mb-1">Nombre de tu iglesia local</label>
+                          <input type="text" required placeholder="Ej: Iglesia Adventista Central de Maturín" value={voluntarioForm.nombre_iglesia} onChange={e => setVoluntarioForm(f => ({ ...f, nombre_iglesia: e.target.value }))} className="w-full bg-slate-900 border border-blue-500/40 text-white rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                      )}
+                    </div>
 
                     <div className="pt-4 flex gap-3">
                       <button type="button" onClick={() => setModalType(null)} className="flex-1 px-4 py-3 text-slate-300 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium transition-colors">Cancelar</button>

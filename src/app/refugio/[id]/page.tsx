@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Home, Package, Send, CheckCircle, ChevronLeft } from 'lucide-react';
+import { Home, Package, Send, CheckCircle, ChevronLeft, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import DialogModal from '@/components/DialogModal';
 import { useDialog } from '@/hooks/useDialog';
@@ -87,6 +87,13 @@ export default function RefugioPage() {
     } else {
       setNuevaNecesidad({ categoria: '', cantidad: '' });
       dialog.showAlert('Solicitud Registrada', 'Tu solicitud ha sido enviada a los líderes de zona y administradores.');
+    }
+  };
+
+  const eliminarNecesidad = async (necesidadId: string) => {
+    const { error } = await supabase.from('necesidades_refugio').delete().eq('id', necesidadId);
+    if (error) {
+      dialog.showAlert('Error', error.message);
     }
   };
 
@@ -179,15 +186,24 @@ export default function RefugioPage() {
                             {req.cantidad_asignada} de {req.cantidad_solicitada} asignados
                           </div>
                         </div>
-                        {req.estado === 'completado' ? (
-                          <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold flex items-center">
-                            <CheckCircle className="w-3 h-3 mr-1" /> COMPLETADO
-                          </span>
-                        ) : (
-                          <span className="bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-bold">
-                            EN PROCESO
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {req.estado === 'completado' ? (
+                            <span className="bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full text-xs font-bold flex items-center">
+                              <CheckCircle className="w-3 h-3 mr-1" /> COMPLETADO
+                            </span>
+                          ) : (
+                            <span className="bg-amber-500/20 text-amber-400 px-3 py-1 rounded-full text-xs font-bold">
+                              EN PROCESO
+                            </span>
+                          )}
+                          <button
+                            onClick={() => eliminarNecesidad(req.id)}
+                            className="text-slate-500 hover:text-red-400 transition-colors p-1"
+                            title="Eliminar necesidad"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="w-full bg-slate-900 rounded-full h-3 mt-4 overflow-hidden border border-slate-800">

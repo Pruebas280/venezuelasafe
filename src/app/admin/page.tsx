@@ -40,6 +40,8 @@ export default function AdminDashboard() {
   const [anuncios, setAnuncios] = useState<Anuncio[]>([]);
   const [voluntarios, setVoluntarios] = useState<Voluntario[]>([]);
   const [necesidades, setNecesidades] = useState<Necesidad[]>([]);
+  const [centrosRefugio, setCentrosRefugio] = useState<any[]>([]);
+  const [selectedCentro, setSelectedCentro] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   
   const [activeTab, setActiveTab] = useState<'reportes'|'noticias'|'voluntarios'|'refugios'>('reportes');
@@ -65,12 +67,14 @@ export default function AdminDashboard() {
     const { data: anunciosData } = await supabase.from('anuncios_oficiales').select('*').order('created_at', { ascending: false });
     const { data: volData } = await supabase.from('voluntarios').select('*').order('created_at', { ascending: false });
     const { data: necData } = await supabase.from('necesidades_refugio').select('*, centros_refugio(nombre)').eq('estado', 'pendiente').order('created_at', { ascending: false });
+    const { data: centrosData } = await supabase.from('centros_refugio').select('*').order('created_at', { ascending: false });
 
     if (zonasData) setZones(zonasData as Zona[]);
     if (reportesData) setReports(reportesData as Reporte[]);
     if (anunciosData) setAnuncios(anunciosData as Anuncio[]);
     if (volData) setVoluntarios(volData as Voluntario[]);
     if (necData) setNecesidades(necData as Necesidad[]);
+    if (centrosData) setCentrosRefugio(centrosData);
     setLoading(false);
   }, [supabase]);
 
@@ -125,6 +129,15 @@ export default function AdminDashboard() {
     const ok = await showDanger('Eliminar Voluntario', '¿Seguro que deseas eliminar este voluntario/vehículo de la base de datos?', 'Sí, eliminar');
     if (!ok) return;
     await supabase.from('voluntarios').delete().eq('id', id);
+    fetchData();
+  };
+
+  // Centros de Refugio
+  const eliminarCentro = async (id: string) => {
+    const ok = await showDanger('Eliminar Centro de Refugio', '¿Seguro que deseas eliminar este centro? Se eliminarán también todas sus necesidades registradas.', 'Sí, eliminar');
+    if (!ok) return;
+    await supabase.from('necesidades_refugio').delete().eq('centro_id', id);
+    await supabase.from('centros_refugio').delete().eq('id', id);
     fetchData();
   };
 
@@ -287,6 +300,33 @@ export default function AdminDashboard() {
             {activeTab === 'refugios' && (
               <div>
                 <p className="text-slate-400 mb-6">Asigna recursos a las necesidades reportadas por los centros de refugio usando el inventario disponible de cualquier zona.</p>
+                
+                {/* Lista de Centros Registrados */}
+                <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">Centros Registrados</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-10">
+                  {centrosRefugio.length === 0 ? (
+                    <div className="col-span-full text-center py-8 text-slate-500">No hay centros de refugio registrados.</div>
+                  ) : centrosRefugio.map(c => (
+                    <div key={c.id} className="p-4 rounded-2xl border border-slate-700 bg-slate-900/50 hover:border-amber-500/40 transition-colors">
+                      <div className="flex justify-between items-start mb-2">
+                        <h4 className="font-bold text-white">{c.nombre}</h4>
+                        <button onClick={() => eliminarCentro(c.id)} className="text-slate-500 hover:text-red-400 p-1 transition-colors" title="Eliminar centro">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-400 mb-1">{c.tipo_organizacion} &bull; {c.num_personas} personas</p>
+                      <p className="text-xs text-slate-500 mb-3 line-clamp-1">{c.direccion}</p>
+                      <button
+                        onClick={() => setSelectedCentro(c)}
+                        className="w-full text-xs bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-2 rounded-lg hover:bg-amber-500/20 transition-colors font-bold"
+                      >
+                        Ver Detalles y Enlace →
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <h3 className="text-lg font-bold text-white mb-4 border-b border-slate-700 pb-2">Necesidades Pendientes</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {necesidades.length === 0 ? <div className="col-span-full text-slate-500 text-center py-8">No hay necesidades pendientes de refugios.</div> : necesidades.map(req => {
                     const progress = Math.min(100, Math.round((req.cantidad_asignada / req.cantidad_solicitada) * 100));
@@ -301,7 +341,7 @@ export default function AdminDashboard() {
                           </span>
                         </div>
                         <div className="flex justify-between text-xs text-slate-400 mb-2">
-                          <span>Recolectado: {req.cantidad_asignada}</span>
+                          <span>Asignado: {req.cantidad_asignada}</span>
                           <span>Meta: {req.cantidad_solicitada}</span>
                         </div>
                         <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden mb-4">
@@ -311,7 +351,7 @@ export default function AdminDashboard() {
                           onClick={() => setAsignacion({ necesidad: req, zona_id: '', categoria: '', cantidad: '' })}
                           className="w-full bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-2 rounded-lg transition-colors flex justify-center items-center"
                         >
-                          <Plus className="w-4 h-4 mr-1" /> Asignar Puntos de Inventario
+                          <Plus className="w-4 h-4 mr-1" /> Asignar Suministros
                         </button>
                       </div>
                     );
@@ -458,6 +498,37 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal info Centro de Refugio */}
+      {selectedCentro && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setSelectedCentro(null)}></div>
+          <div className="relative bg-slate-800 border border-amber-500/30 rounded-3xl shadow-2xl w-full max-w-lg p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-2xl font-bold text-white">{selectedCentro.nombre}</h3>
+              <button onClick={() => setSelectedCentro(null)} className="text-slate-400 hover:text-white p-1">✕</button>
+            </div>
+            <div className="space-y-3 mb-6">
+              <p className="text-slate-300"><span className="text-slate-500 font-semibold">Tipo: </span>{selectedCentro.tipo_organizacion}</p>
+              <p className="text-slate-300"><span className="text-slate-500 font-semibold">Dirección: </span>{selectedCentro.direccion}</p>
+              <p className="text-slate-300"><span className="text-slate-500 font-semibold">Personas alojadas: </span>{selectedCentro.num_personas}</p>
+              <p className="text-slate-300"><span className="text-slate-500 font-semibold">Responsable: </span>{selectedCentro.contacto_nombre}</p>
+              <a href={`https://wa.me/${selectedCentro.contacto_telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center text-teal-400 font-mono hover:text-teal-300">
+                💬 {selectedCentro.contacto_telefono}
+              </a>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+              <p className="text-xs text-amber-400 font-bold mb-2">🔗 ENLACE Único del Panel de Refugio</p>
+              <div className="bg-slate-900 rounded-lg px-3 py-2 font-mono text-sm text-slate-300 break-all mb-3">
+                {typeof window !== 'undefined' ? window.location.origin : 'https://tu-dominio.netlify.app'}/refugio/{selectedCentro.id}
+              </div>
+              <a href={`/refugio/${selectedCentro.id}`} target="_blank" rel="noopener noreferrer" className="inline-block bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold px-4 py-2 rounded-lg text-sm transition-colors">
+                Abrir Panel del Refugio →
+              </a>
+            </div>
           </div>
         </div>
       )}
