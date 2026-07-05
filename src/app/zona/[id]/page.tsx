@@ -149,7 +149,7 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
       <nav className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <Image src="/logo.jpg" alt="AVCOR Logo" width={32} height={32} className="rounded-full shadow-lg border border-teal-500/30" />
+            <img src="/logo.jpg" alt="AVCOR Logo" className="w-8 h-8 rounded-full shadow-lg border border-teal-500/30" />
             <ShieldCheck className="text-teal-400 w-6 h-6" />
             <span className="font-bold text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">
               {zona ? zona.nombre_zona : 'Cargando...'}

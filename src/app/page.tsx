@@ -125,7 +125,7 @@ export default function PublicPortal() {
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/logo.jpg" alt="AVCOR Logo" width={48} height={48} className="rounded-full shadow-lg border-2 border-emerald-500/30" />
+            <img src="/logo.jpg" alt="AVCOR Logo" className="w-12 h-12 rounded-full shadow-lg border-2 border-emerald-500/30" />
             <span className="font-black text-xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">AVCOR</span>
           </div>
           <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">
