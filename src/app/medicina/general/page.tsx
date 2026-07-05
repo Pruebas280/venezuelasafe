@@ -25,7 +25,7 @@ type RegistroMedicina = {
 export default function MedicinaGeneralPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { dialogProps } = useDialog();
+  const { dialogProps, showAlert, showDanger } = useDialog();
 
   const [zonas, setZonas] = useState<ZonaMedicina[]>([]);
   const [registros, setRegistros] = useState<RegistroMedicina[]>([]);
@@ -72,10 +72,10 @@ export default function MedicinaGeneralPage() {
   }, [supabase]);
 
   const vaciarHistorialGlobal = async () => {
-    const ok = await dialogProps.showDanger?.('Vaciar Todo el Historial', '¿Seguro que quieres eliminar TODO el historial de clasificación de medicinas de todas las zonas? (Esto NO altera la cantidad actual del inventario).', 'Sí, vaciar');
+    const ok = await showDanger('Vaciar Todo el Historial', '¿Seguro que quieres eliminar TODO el historial de clasificación de medicinas de todas las zonas? (Esto NO altera la cantidad actual del inventario).', 'Sí, vaciar');
     if (!ok) return;
     const { error } = await supabase.from('clasificacion_medicinas').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    // Error silently handled or UI reloads via channel
+    if (error) await showAlert('Error', error.message);
   };
 
   const handleSignOut = async () => {
