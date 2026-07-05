@@ -16,7 +16,7 @@ export default function PublicPortal() {
   // Forms state
   const [form, setForm] = useState({ zona_id: '', numero_telefono: '', descripcion: '' });
   const [voluntarioForm, setVoluntarioForm] = useState({
-    nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: ''
+    nombre: '', telefono: '', edad: '', oficio: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: ''
   });
   const [refugioForm, setRefugioForm] = useState({
     nombre: '', tipo_organizacion: 'iglesia', direccion: '', num_personas: '', contacto_nombre: '', contacto_telefono: ''
@@ -64,6 +64,8 @@ export default function PublicPortal() {
     await supabase.from('voluntarios').insert({
       nombre: voluntarioForm.nombre,
       telefono: voluntarioForm.telefono,
+      edad: voluntarioForm.edad ? parseInt(voluntarioForm.edad) : null,
+      oficio: voluntarioForm.oficio || null,
       ofrece_voluntariado: voluntarioForm.ofrece_voluntariado,
       ofrece_vehiculo: voluntarioForm.ofrece_vehiculo,
       vehiculo_tipo: voluntarioForm.ofrece_vehiculo ? voluntarioForm.vehiculo_tipo : null,
@@ -74,7 +76,7 @@ export default function PublicPortal() {
     });
 
     finishSubmit();
-    setVoluntarioForm({ nombre: '', telefono: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: '' });
+    setVoluntarioForm({ nombre: '', telefono: '', edad: '', oficio: '', ofrece_voluntariado: false, ofrece_vehiculo: false, vehiculo_tipo: 'carro', vehiculo_modelo: '', vehiculo_docs_aldia: false, es_adventista: false, nombre_iglesia: '' });
   };
 
   const handleSubmitRefugio = async (e: React.FormEvent) => {
@@ -122,8 +124,9 @@ export default function PublicPortal() {
       {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="font-black text-2xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">
-            AVCOR
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="AVCOR" className="h-9 w-9 rounded-xl" />
+            <span className="font-black text-xl tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">AVCOR</span>
           </div>
           <Link href="/login" className="text-sm font-semibold text-slate-300 hover:text-white transition-colors">
             Acceso Personal →
@@ -297,6 +300,14 @@ export default function PublicPortal() {
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-2">Teléfono de Contacto</label>
                         <input required type="tel" value={voluntarioForm.telefono} onChange={e => setVoluntarioForm(f => ({ ...f, telefono: e.target.value }))} className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Edad</label>
+                        <input type="number" min="14" max="90" placeholder="Ej: 28" value={voluntarioForm.edad} onChange={e => setVoluntarioForm(f => ({ ...f, edad: e.target.value }))} className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-2">Oficio / Profesión</label>
+                        <input type="text" placeholder="Ej: Médico, Albañil, Conductor..." value={voluntarioForm.oficio} onChange={e => setVoluntarioForm(f => ({ ...f, oficio: e.target.value }))} className="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
                       </div>
                     </div>
 

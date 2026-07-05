@@ -55,13 +55,37 @@ export async function middleware(request: NextRequest) {
     }
     const role = user.app_metadata?.role;
     if (role !== 'zone_leader' && role !== 'super_admin') {
-      return NextResponse.redirect(new URL('/', request.url)) // Unauthorized
+      return NextResponse.redirect(new URL('/', request.url))
     }
     
     // Si el rol es zone_leader, asegurarse de que solo acceda a su zona
     const pathZonaId = path.split('/')[2];
     if (role === 'zone_leader' && pathZonaId && user.app_metadata?.zona_id !== pathZonaId) {
        return NextResponse.redirect(new URL(`/zona/${user.app_metadata.zona_id}`, request.url))
+    }
+  }
+
+  // Protect Medicina routes
+  if (path.startsWith('/medicina')) {
+    if (!user) {
+      return NextResponse.redirect(new URL('/login', request.url))
+    }
+    const role = user.app_metadata?.role;
+    const allowedRoles = ['super_admin', 'zone_leader', 'cadetes_medicos', 'coordinador_medico_general'];
+    if (!allowedRoles.includes(role)) {
+      return NextResponse.redirect(new URL('/', request.url))
+    }
+    // El coordinador por zona solo accede a su zona
+    if (role === 'cadetes_medicos') {
+      const zonaId = user.app_metadata?.zona_id;
+      const pathZonaId = path.split('/')[2];
+      if (pathZonaId && zonaId !== pathZonaId) {
+        return NextResponse.redirect(new URL(`/medicina/${zonaId}`, request.url))
+      }
+    }
+    // El coordinador general solo accede a /medicina/general
+    if (role === 'coordinador_medico_general' && !path.includes('/general')) {
+      return NextResponse.redirect(new URL('/medicina/general', request.url))
     }
   }
 

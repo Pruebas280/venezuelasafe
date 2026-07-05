@@ -47,6 +47,10 @@ export default function LoginPage() {
       router.push('/admin');
     } else if (role === 'zone_leader' && zonaId) {
       router.push(`/zona/${zonaId}`);
+    } else if (role === 'cadetes_medicos' && zonaId) {
+      router.push(`/medicina/${zonaId}`);
+    } else if (role === 'coordinador_medico_general') {
+      router.push('/medicina/general');
     } else {
       setError('Tu usuario no tiene un rol asignado. Contacta al administrador de AVCOR.');
       await supabase.auth.signOut();

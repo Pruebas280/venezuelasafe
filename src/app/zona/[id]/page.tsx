@@ -148,8 +148,9 @@ export default function ZonaDashboard({ params }: { params: Promise<{ id: string
     <div className="min-h-screen bg-slate-900 text-slate-50 pb-20 selection:bg-teal-500 selection:text-white">
       <nav className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 shadow-lg sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <ShieldCheck className="text-teal-400 w-8 h-8" />
+          <div className="flex items-center space-x-3">
+            <img src="/logo.png" alt="AVCOR" className="h-8 w-8 rounded-lg" />
+            <ShieldCheck className="text-teal-400 w-6 h-6" />
             <span className="font-bold text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">
               {zona ? zona.nombre_zona : 'Cargando...'}
             </span>

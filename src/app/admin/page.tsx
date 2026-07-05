@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useCallback } from 'react';
-import { LayoutDashboard, Megaphone, ShieldCheck, Activity, LogOut, RefreshCw, Plus, Trash2, UserCheck, Car, Home, CheckCircle } from 'lucide-react';
+import { LayoutDashboard, Megaphone, ShieldCheck, Activity, LogOut, RefreshCw, Plus, Trash2, UserCheck, Car, Home, CheckCircle, Pill, Users } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -25,6 +25,7 @@ type Voluntario = {
   ofrece_voluntariado: boolean; ofrece_vehiculo: boolean;
   vehiculo_tipo: string; vehiculo_modelo: string; vehiculo_docs_aldia: boolean;
   estado: string; created_at: string;
+  edad?: number; oficio?: string;
 };
 
 type Necesidad = {
@@ -44,7 +45,11 @@ export default function AdminDashboard() {
   const [selectedCentro, setSelectedCentro] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   
-  const [activeTab, setActiveTab] = useState<'reportes'|'noticias'|'voluntarios'|'refugios'>('reportes');
+  const [activeTab, setActiveTab] = useState<'reportes'|'noticias'|'voluntarios'|'refugios'|'medicinas'>('reportes');
+
+  // Medicinas
+  const [registrosMedicinas, setRegistrosMedicinas] = useState<any[]>([]);
+  const [totalMedicinasGlobal, setTotalMedicinasGlobal] = useState(0);
 
   // Asignación de Recursos state
   const [asignacion, setAsignacion] = useState<{ necesidad: Necesidad | null, zona_id: string, categoria: string, cantidad: string }>({
@@ -68,6 +73,7 @@ export default function AdminDashboard() {
     const { data: volData } = await supabase.from('voluntarios').select('*').order('created_at', { ascending: false });
     const { data: necData } = await supabase.from('necesidades_refugio').select('*, centros_refugio(nombre)').eq('estado', 'pendiente').order('created_at', { ascending: false });
     const { data: centrosData } = await supabase.from('centros_refugio').select('*').order('created_at', { ascending: false });
+    const { data: medsData } = await supabase.from('clasificacion_medicinas').select('*, zonas(nombre_zona)').order('created_at', { ascending: false }).limit(100);
 
     if (zonasData) setZones(zonasData as Zona[]);
     if (reportesData) setReports(reportesData as Reporte[]);
@@ -75,6 +81,9 @@ export default function AdminDashboard() {
     if (volData) setVoluntarios(volData as Voluntario[]);
     if (necData) setNecesidades(necData as Necesidad[]);
     if (centrosData) setCentrosRefugio(centrosData);
+    if (medsData) {
+      setRegistrosMedicinas(medsData);
+    }
     setLoading(false);
   }, [supabase]);
 
@@ -139,6 +148,26 @@ export default function AdminDashboard() {
     await supabase.from('necesidades_refugio').delete().eq('centro_id', id);
     await supabase.from('centros_refugio').delete().eq('id', id);
     fetchData();
+  };
+
+  // Calcular totales de medicamentos por zona
+  const totalMedsPorZona = zones.map(z => ({
+    id: z.id,
+    nombre: z.nombre_zona,
+    total: z.inventario.find(i => i.tipo === 'medicamentos')?.cantidad_disponible ?? 0,
+  }));
+  const totalMedicinasGlobalCalc = totalMedsPorZona.reduce((s, z) => s + z.total, 0);
+
+  const vaciarHistorialMedicinasGlobal = async () => {
+    const ok = await showDanger('Vaciar Historial', '¿Estás seguro de que quieres eliminar TODO el historial de clasificación de medicinas de todas las zonas? (Esto NO altera la cantidad actual del inventario, solo borra el registro).', 'Sí, vaciar');
+    if (!ok) return;
+    const { error } = await supabase.from('clasificacion_medicinas').delete().neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
+    if (error) {
+      await showAlert('Error', error.message);
+    } else {
+      fetchData();
+      await showAlert('Éxito', 'Se ha vaciado el historial correctamente.');
+    }
   };
 
   // Asignación
@@ -208,8 +237,9 @@ export default function AdminDashboard() {
       <div className="min-h-screen bg-slate-900 pb-20 text-slate-50 selection:bg-teal-500 selection:text-white">
         <nav className="bg-slate-900/50 backdrop-blur-md border-b border-slate-800 shadow-lg sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <ShieldCheck className="text-teal-400 w-8 h-8" />
+            <div className="flex items-center space-x-3">
+              <img src="/logo.png" alt="AVCOR" className="h-8 w-8 rounded-lg" />
+              <ShieldCheck className="text-teal-400 w-6 h-6" />
               <span className="font-bold text-xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">AVCOR Súper Admin</span>
             </div>
             <div className="flex items-center gap-3">
@@ -266,7 +296,10 @@ export default function AdminDashboard() {
             <button onClick={() => setActiveTab('voluntarios')} className={`px-5 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap flex items-center ${activeTab === 'voluntarios' ? 'bg-slate-800 text-blue-400 border-t border-l border-r border-slate-700' : 'text-slate-400 hover:text-white'}`}>
               <UserCheck className="w-4 h-4 mr-2" /> Gestión Voluntarios
             </button>
-            <button onClick={() => setActiveTab('noticias')} className={`px-5 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap flex items-center ${activeTab === 'noticias' ? 'bg-slate-800 text-emerald-400 border-t border-l border-r border-slate-700' : 'text-slate-400 hover:text-white'}`}>
+            <button onClick={() => setActiveTab('medicinas')} className={`px-5 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap flex items-center ${activeTab === 'medicinas' ? 'bg-slate-800 text-emerald-400 border-t border-l border-r border-slate-700' : 'text-slate-400 hover:text-white'}`}>
+              <Pill className="w-4 h-4 mr-2" /> Medicamentos
+            </button>
+            <button onClick={() => setActiveTab('noticias')} className={`px-5 py-3 rounded-t-xl font-bold transition-colors whitespace-nowrap flex items-center ${activeTab === 'noticias' ? 'bg-slate-800 text-teal-400 border-t border-l border-r border-slate-700' : 'text-slate-400 hover:text-white'}`}>
               <Megaphone className="w-4 h-4 mr-2" /> Portal Noticias
             </button>
           </div>
@@ -368,8 +401,9 @@ export default function AdminDashboard() {
                     {voluntarios.filter(v => v.estado === 'pendiente').map(v => (
                       <div key={v.id} className="p-4 rounded-xl border border-slate-700 bg-slate-900 flex justify-between items-center">
                         <div>
-                          <div className="font-bold text-white">{v.nombre} <a href={`https://wa.me/${v.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-teal-400 font-mono text-sm ml-2">💬 {v.telefono}</a></div>
-                          <div className="text-sm text-slate-400 flex gap-2 mt-1">
+                          <div className="font-bold text-white">{v.nombre} <span className="text-xs text-slate-500 font-normal ml-2">{v.edad ? `${v.edad} años` : 'Edad N/A'} {v.oficio ? `• ${v.oficio}` : ''}</span></div>
+                          <a href={`https://wa.me/${v.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-teal-400 font-mono text-sm inline-block mt-1">💬 {v.telefono}</a>
+                          <div className="text-sm text-slate-400 flex gap-2 mt-2">
                             {v.ofrece_voluntariado && <span className="bg-blue-500/20 text-blue-400 px-2 rounded">Voluntario</span>}
                             {v.ofrece_vehiculo && <span className="bg-indigo-500/20 text-indigo-400 px-2 rounded">Vehículo ({v.vehiculo_tipo}: {v.vehiculo_modelo})</span>}
                           </div>
@@ -391,7 +425,10 @@ export default function AdminDashboard() {
                         <div key={v.id} className="p-3 rounded-xl border border-slate-700 bg-slate-900/50 flex justify-between items-center">
                           <div>
                             <div className="font-bold text-slate-200">{v.nombre}</div>
-                            <div className="text-teal-400 font-mono text-xs">{v.telefono}</div>
+                            <div className="text-xs text-slate-400 mb-1">{v.edad ? `${v.edad} años` : 'Edad N/A'} {v.oficio ? `• ${v.oficio}` : ''}</div>
+                            <a href={`https://wa.me/${v.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-teal-400 font-mono text-xs hover:text-teal-300">
+                              💬 {v.telefono}
+                            </a>
                           </div>
                           <button onClick={() => eliminarVoluntario(v.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 className="w-4 h-4" /></button>
                         </div>
@@ -405,7 +442,12 @@ export default function AdminDashboard() {
                         <div key={v.id} className="p-3 rounded-xl border border-indigo-500/20 bg-slate-900/50 flex justify-between items-center">
                           <div>
                             <div className="font-bold text-indigo-300">{v.vehiculo_tipo.toUpperCase()} - {v.vehiculo_modelo}</div>
-                            <div className="text-slate-400 text-xs">Dueño: {v.nombre} | {v.telefono}</div>
+                            <div className="text-slate-400 text-xs mt-1 mb-1 flex items-center gap-2">
+                              Dueño: {v.nombre} | 
+                              <a href={`https://wa.me/${v.telefono.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="text-teal-400 font-mono hover:text-teal-300">
+                                💬 {v.telefono}
+                              </a>
+                            </div>
                             {v.vehiculo_docs_aldia && <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 rounded uppercase mt-1 inline-block">Docs al día</span>}
                           </div>
                           <button onClick={() => eliminarVoluntario(v.id)} className="text-red-400 hover:text-red-300 p-2"><Trash2 className="w-4 h-4" /></button>
@@ -447,6 +489,68 @@ export default function AdminDashboard() {
                       <div className="text-xs text-slate-500">{tiempoRelativo(anuncio.created_at)}</div>
                     </div>
                   ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB: MEDICINAS */}
+            {activeTab === 'medicinas' && (
+              <div>
+                {/* Total Global */}
+                <div className="bg-gradient-to-br from-emerald-900/30 to-teal-900/20 border border-emerald-500/30 rounded-2xl p-6 mb-8 flex items-center gap-6">
+                  <div className="w-14 h-14 bg-emerald-500/20 rounded-xl flex items-center justify-center shrink-0">
+                    <Pill className="w-7 h-7 text-emerald-400" />
+                  </div>
+                  <div>
+                    <p className="text-emerald-400 text-xs font-bold uppercase tracking-widest">Total Global de Medicamentos</p>
+                    <p className="text-4xl font-black text-white">{totalMedicinasGlobalCalc.toLocaleString()}</p>
+                  </div>
+                  <div className="ml-auto">
+                    <a href="/medicina/general" target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 font-bold px-4 py-2 rounded-xl text-sm transition-colors">
+                      Ver Dashboard Completo →
+                    </a>
+                  </div>
+                </div>
+
+                {/* Por Zona */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                  {totalMedsPorZona.map(z => (
+                    <div key={z.id} className="bg-slate-900/50 border border-slate-700 rounded-2xl p-4">
+                      <p className="text-slate-400 text-xs font-bold uppercase mb-1 truncate">{z.nombre}</p>
+                      <p className="text-3xl font-black text-white">{z.total}</p>
+                      <p className="text-xs text-emerald-400 mt-1">medicamentos</p>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Historial de Clasificaciones */}
+                <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                  <h3 className="text-lg font-bold text-white">Clasificaciones Recientes</h3>
+                  <button onClick={vaciarHistorialMedicinasGlobal} className="text-xs bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg flex items-center transition-colors">
+                    <Trash2 className="w-3 h-3 mr-1" /> Vaciar Historial
+                  </button>
+                </div>
+                <div className="overflow-x-auto bg-slate-900/30 rounded-2xl border border-slate-700">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-700">
+                        <th className="text-left text-xs font-bold text-slate-400 uppercase py-3 px-4">Medicamento</th>
+                        <th className="text-left text-xs font-bold text-slate-400 uppercase py-3 px-4">Zona</th>
+                        <th className="text-right text-xs font-bold text-slate-400 uppercase py-3 px-4">Cantidad</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/40">
+                      {registrosMedicinas.length === 0 ? (
+                        <tr><td colSpan={3} className="text-center text-slate-500 py-8">No hay registros aún.</td></tr>
+                      ) : registrosMedicinas.map((r: any) => (
+                        <tr key={r.id} className="hover:bg-slate-700/20">
+                          <td className="py-3 px-4 font-semibold text-white capitalize">{r.nombre_medicina}</td>
+                          <td className="py-3 px-4"><span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded-full">{r.zonas?.nombre_zona}</span></td>
+                          <td className="py-3 px-4 text-right font-black text-emerald-400">+{r.cantidad}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
